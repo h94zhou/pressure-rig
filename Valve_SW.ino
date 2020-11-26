@@ -1,32 +1,24 @@
+#include <LiquidCrystal_I2C.h>
+#include <Wire.h>
+
 /*
-  Blink
-
-  Turns an LED on for one second, then off for one second, repeatedly.
-
-  Most Arduinos have an on-board LED you can control. On the UNO, MEGA and ZERO
-  it is attached to digital pin 13, on MKR1000 on pin 6. LED_BUILTIN is set to
-  the correct LED pin independent of which board is used.
-  If you want to know what pin the on-board LED is connected to on your Arduino
-  model, check the Technical Specs of your board at:
-  https://www.arduino.cc/en/Main/Products
-
-  modified 8 May 2014
-  by Scott Fitzgerald
-  modified 2 Sep 2016
-  by Arturo Guadalupi
-  modified 8 Sep 2016
-  by Colby Newman
-
-  This example code is in the public domain.
-
-  http://www.arduino.cc/en/Tutorial/Blink
-*/
+ * Challenges:
+ * Probably only want start and stop buttons to be interrupts (not sure if rotary encoder supports)
+ * For lower frequencies need a way to poll without busy waiting 
+ * First lets try a non-interrupting loop
+ */
 
 //Logic inputs for the DRV8871 unit
 //By default the valve is off when there is no voltage. Keep both pins to 0 (low)
 //To turn on, set in1 to high, in2 to low (current flows OUT1 to OUT2)
 const int mtr_in1 = 11;
 const int mtr_in2 = 10;
+
+LiquidCrystal_I2C lcd(0x27,20,4);
+
+uint32_t prev_micros;
+int frequency;             // in Hz
+int freq_delta = 50;        // in Hz
 
 // the setup function runs once when you press reset or power the board
 void setup() {
@@ -35,17 +27,35 @@ void setup() {
   pinMode(mtr_in1, OUTPUT);
   pinMode(mtr_in2, OUTPUT);
 
+  Serial.begin(9600);
+
+  lcd.init();
+
   //set the initial valve start
   digitalWrite(mtr_in1, LOW);
   digitalWrite(mtr_in2, LOW);
+  
+  lcd.backlight();
+  lcd.setCursor(1,0);
+  lcd.print("Fibos");
+  
+  frequency = 300;
+  delay(1000);
 }
 
 // the loop function runs over and over again forever
 void loop() {
-  digitalWrite(LED_BUILTIN, HIGH);   // turn the LED on (HIGH is the voltage level)
-  digitalWrite(mtr_in1, HIGH);
-  delay(100);                       // wait for a second
-  digitalWrite(LED_BUILTIN, LOW);    // turn the LED off by making the voltage LOW
-  digitalWrite(mtr_in1, LOW);
-  delay(100);                       // wait for a second
+
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print(frequency);
+  lcd.print(" Hz");
+
+  tone(mtr_in1, frequency);
+  // cycle frequency
+  if (frequency <= 50 || frequency >= 1200) {
+    freq_delta *= -1;
+  }
+  frequency += freq_delta;
+  delay(1000);
 }
