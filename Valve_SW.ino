@@ -68,11 +68,14 @@ void printLCD() {
     lcd.print(freqDigits[i]);
   }
   lcd.print(" Hz");
-  lcd.setCursor(0,1);
-  lcd.print("digit: ");
-  lcd.print(freqDigit);
-  lcd.print("  ");
-  lcd.print(state);
+  lcd.setCursor(freqDigit,1);
+  lcd.print("^");
+  lcd.setCursor(10,1);
+  if (state == active) {
+    lcd.print("ACTIVE");
+  } else {
+    lcd.print("PAUSED");
+  }
 }
 
 void checkDigits() {
