@@ -7,9 +7,12 @@
  * For lower frequencies need a way to poll without busy waiting 
  * First lets try a non-interrupting loop
  */
+#define btnIntPin 2
 #define encoder0PinA 3
 #define encoder0PinB 4
 #define encoder0Btn 5
+#define startBtn 6
+#define stopBtn 7
 #define mtr_in1 11
 #define mtr_in2 10
 
@@ -25,12 +28,14 @@ int freqDelta = 50;        // in Hz
 volatile int encoder0Pos = 0;
 volatile int valRotary;
 int lastValRotary;
-int freqState;
+int freqDigit;
+int freqDigits[] = {0,0,0,1};
 
 enum rigState {
   paused,
   active
 };
+rigState state = paused;
 
 void doEncoder()
 {
@@ -45,14 +50,65 @@ void doEncoder()
   valRotary = encoder0Pos/2.5;
 }
 
-void printLCD(int frequency, int freqState) {
+void doButtons() {
+  if (digitalRead(startBtn)) {
+    // pressed start
+    state = active;
+  }
+  if (digitalRead(stopBtn)) {
+    // pressed stop 
+    state = paused;
+  }
+}
+
+void printLCD() {
   lcd.clear();
   lcd.setCursor(0,0);
-  lcd.print(frequency);
+  for (int i = 0; i < 4; ++i) {
+    lcd.print(freqDigits[i]);
+  }
   lcd.print(" Hz");
   lcd.setCursor(0,1);
   lcd.print("digit: ");
-  lcd.print(freqState);
+  lcd.print(freqDigit);
+  lcd.print("  ");
+  lcd.print(state);
+}
+
+void checkDigits() {
+  if(valRotary > lastValRotary) {
+    Serial.print("  CCW");      // decrement
+//    if (freqDigit == 0) {
+      // only 0-1
+//      freqDigits[freqDigit] = (--freqDigits[freqDigit] < 0)? 1 : freqDigits[freqDigit];
+//    } else if (freqDigit == 1) {
+      // 0-2 or 0-9 depending on digit 0
+//      freqDigits[freqDigit] = (--freqDigits[freqDigit] < 0)? 2 : freqDigits[freqDigit];
+//    } else {
+      freqDigits[freqDigit] = (--freqDigits[freqDigit] < 0)? 9 : freqDigits[freqDigit];
+//    }
+  }
+  if(valRotary < lastValRotary) {
+    Serial.print("  CW");       // increment
+//    if (freqDigit == 0) {
+      // only 0-1
+//      freqDigits[freqDigit] = (++freqDigits[freqDigit] > 1)? 0 : freqDigits[freqDigit];
+//    } else {
+      freqDigits[freqDigit] = (++freqDigits[freqDigit] > 9)? 0 : freqDigits[freqDigit];
+//    }
+  }
+
+  frequency = freqDigits[0]*1000 + freqDigits[1]*100 + freqDigits[2]*10 + freqDigits[3];
+  Serial.print(frequency);
+  if (frequency > 1200) {         // trim frequency
+    frequency = 1200;
+    freqDigits[0] = 1;
+    freqDigits[1] = 2;
+    freqDigits[2] = 0;
+    freqDigits[3] = 0;
+  }
+  lastValRotary = valRotary;
+  
 }
 
 // the setup function runs once when you press reset or power the board
@@ -80,9 +136,15 @@ void setup() {
   pinMode(encoder0PinB, INPUT_PULLUP);
   pinMode(encoder0Btn, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(encoder0PinA), doEncoder, CHANGE);
+
+  // init buttons
+  pinMode(btnIntPin, INPUT);
+  pinMode(startBtn, INPUT);
+  pinMode(stopBtn, INPUT);
+  attachInterrupt(digitalPinToInterrupt(btnIntPin), doButtons, CHANGE);
   
   frequency = 300;
-  freqState = 0;
+  freqDigit = 0;
   delay(1000);
 }
 
@@ -90,17 +152,11 @@ void setup() {
 void loop() {
   int btn = digitalRead(encoder0Btn);
   if (!btn) {
-    freqState = (++freqState >= 4)? 0 : freqState;  // rollover to starting digit
+    freqDigit = (++freqDigit >= 4)? 0 : freqDigit;  // rollover to starting digit
   }
-  printLCD(frequency, freqState);
+  printLCD();
 
-  if(valRotary > lastValRotary) {
-    Serial.print("  CW");
-  }
-  if(valRotary < lastValRotary) {
-    Serial.print("  CCW");
-  }
-  lastValRotary = valRotary;
+  checkDigits();
   
-  delay(1000);
+  delay(250);
 }
