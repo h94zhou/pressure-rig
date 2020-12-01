@@ -24,12 +24,14 @@ LiquidCrystal_I2C lcd(0x27,20,4);
 
 uint32_t prev_micros;
 int frequency;             // in Hz
-int freqDelta = 50;        // in Hz
+int freqOffset = 0;        // in Hz
 volatile int encoder0Pos = 0;
 volatile int valRotary;
 int lastValRotary;
 int freqDigit;
 int freqDigits[] = {0,0,0,1};
+int period_in_ms;
+int period_in_us;
 
 enum rigState {
   paused,
@@ -110,6 +112,10 @@ void checkDigits() {
     freqDigits[2] = 0;
     freqDigits[3] = 0;
   }
+  
+  period_in_ms = 1000 / (frequency + freqOffset);
+  period_in_us = 1000000 / (frequency + freqOffset);
+  
   lastValRotary = valRotary;
   
 }
@@ -160,6 +166,28 @@ void loop() {
   printLCD();
 
   checkDigits();
-  
-  delay(250);
+
+  // for 1s of delay, toggle mtr1 output pin
+  int period_in_ms = 1000 / (frequency + freqOffset);
+  int period_in_us = 1000000 / (frequency + freqOffset);
+  if (state) {
+    if (frequency > 500) {
+      // use us
+      for (int i = 0; i < 1000000/period_in_us; ++i){
+        digitalWrite(mtr_in1, HIGH);
+        delayMicroseconds(period_in_us/2);
+        digitalWrite(mtr_in1, LOW);
+        delayMicroseconds(period_in_us/2);
+      }
+    } else {
+      for (int i = 0; i < 1000/period_in_ms; ++i){
+        digitalWrite(mtr_in1, HIGH);
+        delay(period_in_ms/2);
+        digitalWrite(mtr_in1, LOW);
+        delay(period_in_ms/2);
+      }
+    }
+  } else {
+    delay(1000);
+  }
 }
