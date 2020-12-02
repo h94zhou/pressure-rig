@@ -89,7 +89,7 @@ bool checkDigits() {
   Serial.print(valRotary);
   Serial.print(" ");
   Serial.println(lastValRotary);
-  if(valRotary > lastValRotary) {
+  if(valRotary - lastValRotary > 1) {
 //    Serial.print("  CCW");      // decrement
 //    if (freqDigit == 0) {
       // only 0-1
@@ -101,7 +101,7 @@ bool checkDigits() {
       freqDigits[freqDigit] = (--freqDigits[freqDigit] < 0)? 9 : freqDigits[freqDigit];
 //    }
   }
-  if(valRotary < lastValRotary) {
+  if(lastValRotary - valRotary > 1) {
 //    Serial.print("  CW");       // increment
 //    if (freqDigit == 0) {
       // only 0-1
