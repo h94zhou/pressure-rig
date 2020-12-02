@@ -30,12 +30,15 @@ volatile int valRotary;
 int lastValRotary;
 int freqDigit;
 int freqDigits[] = {0,0,0,1};
+static bool digitsChanged = false;
 
 enum rigState {
   paused,
   active
 };
-rigState state = paused;
+static rigState state = paused;
+static bool stateChanged = false;
+static int toneFreq = 0;
 
 void doEncoder()
 {
@@ -48,6 +51,7 @@ void doEncoder()
   encoder0Pos--;
   }
   valRotary = encoder0Pos/2.5;
+  digitsChanged = true;
 }
 
 void doButtons() {
@@ -59,6 +63,7 @@ void doButtons() {
     // pressed stop 
     state = paused;
   }
+  stateChanged = true;
 }
 
 void printLCD() {
@@ -78,9 +83,14 @@ void printLCD() {
   }
 }
 
-void checkDigits() {
+bool checkDigits() {
+  int prevFreq = frequency;
+  Serial.print("val, last: ");
+  Serial.print(valRotary);
+  Serial.print(" ");
+  Serial.println(lastValRotary);
   if(valRotary > lastValRotary) {
-    Serial.print("  CCW");      // decrement
+//    Serial.print("  CCW");      // decrement
 //    if (freqDigit == 0) {
       // only 0-1
 //      freqDigits[freqDigit] = (--freqDigits[freqDigit] < 0)? 1 : freqDigits[freqDigit];
@@ -92,7 +102,7 @@ void checkDigits() {
 //    }
   }
   if(valRotary < lastValRotary) {
-    Serial.print("  CW");       // increment
+//    Serial.print("  CW");       // increment
 //    if (freqDigit == 0) {
       // only 0-1
 //      freqDigits[freqDigit] = (++freqDigits[freqDigit] > 1)? 0 : freqDigits[freqDigit];
@@ -102,7 +112,7 @@ void checkDigits() {
   }
 
   frequency = freqDigits[0]*1000 + freqDigits[1]*100 + freqDigits[2]*10 + freqDigits[3];
-  Serial.print(frequency);
+//  Serial.print(frequency);
   if (frequency > 1200) {         // trim frequency
     frequency = 1200;
     freqDigits[0] = 1;
@@ -111,7 +121,7 @@ void checkDigits() {
     freqDigits[3] = 0;
   }
   lastValRotary = valRotary;
-  
+  return (prevFreq != frequency); // return true if frequency has changed
 }
 
 // the setup function runs once when you press reset or power the board
@@ -149,6 +159,7 @@ void setup() {
   frequency = 300;
   freqDigit = 0;
   delay(1000);
+  printLCD();
 }
 
 // the loop function runs over and over again forever
@@ -157,9 +168,23 @@ void loop() {
   if (!btn) {
     freqDigit = (++freqDigit >= 4)? 0 : freqDigit;  // rollover to starting digit
   }
-  printLCD();
 
-  checkDigits();
+  // only print lcd if state or digits or digit select changed
+  if (!btn || digitsChanged || stateChanged) { 
+    checkDigits();
+    printLCD();
+    digitsChanged = false;
+    stateChanged = false;
+  }
+  if (toneFreq != frequency && state) {
+    // only change tone if freq changed from what is currently playing and play state
+    toneFreq = frequency;
+    tone(mtr_in1, toneFreq);
+  }
+  if (!state) {
+    noTone(mtr_in1);
+    toneFreq = 0;
+  }
   
-  delay(250);
+  delay(500);
 }
