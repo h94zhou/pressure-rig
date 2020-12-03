@@ -1,5 +1,6 @@
- #include <LiquidCrystal_I2C.h>
-#include <Wire.h>
+#include <Tone.h>
+#include <LiquidCrystal_I2C.h>
+//#include <Wire.h>
 
 /*
  * Challenges:
@@ -18,6 +19,7 @@
 #define BTN_DEBOUNCE_VAL 50
 #define ENC_DEBOUNCE_VAL 7
 #define ENC_DELTA_VAL 1
+#define PIN_UNUSED 13
 
 //Logic inputs for the DRV8871 unit
 //By default the valve is off when there is no voltage. Keep both pins to 0 (low)
@@ -26,7 +28,7 @@
 LiquidCrystal_I2C lcd(0x27,20,4);
 
 uint32_t prev_micros;
-int frequency;             // in Hz
+int frequency = 1;             // in Hz
 int freqDelta = 50;        // in Hz
 volatile int encoder0Pos = 0;
 volatile int valRotary;
@@ -40,6 +42,8 @@ volatile static bool stateChanged = false;
 static int toneFreq = 0;
 static int prevTime = 0;
 static int period_in_ms = 0;
+Tone tone2;
+Tone tone1;
 
 volatile static int btn_debounce = 0;
 static int sw_debounce = 0;
@@ -132,9 +136,7 @@ bool checkDigits() {
 
 // the setup function runs once when you press reset or power the board
 void setup() {
-  // initialize digital pin LED_BUILTIN as an output.
-  pinMode(LED_BUILTIN, OUTPUT);
-  pinMode(mtr_in1, OUTPUT);
+  // mtr_in2 remains low
   pinMode(mtr_in2, OUTPUT);
 
   // init serial output
@@ -147,7 +149,6 @@ void setup() {
   lcd.print("Fibos");
 
   //set the initial valve start
-  digitalWrite(mtr_in1, LOW);
   digitalWrite(mtr_in2, LOW);
 
   // init rotary encoder
@@ -159,8 +160,11 @@ void setup() {
   // init button
   pinMode(btnIntPin, INPUT);
   attachInterrupt(digitalPinToInterrupt(btnIntPin), doButtons, FALLING);
+
+  // init tones
+  tone2.begin(PIN_UNUSED);
+  tone1.begin(mtr_in1);
   
-  frequency = 300;
   freqDigit = 0;
   delay(1000);
   printLCD();
@@ -198,26 +202,27 @@ void loop() {
   // only change tone if freq changed from what is currently playing and play state
   if (toneFreq != frequency && state) {
     toneFreq = frequency;
-    if (toneFreq < 31) {              // basic tone function does not go below 31Hz
-      // set digital on off?
-      digitalWrite(mtr_in1, HIGH);
-      delay(period_in_ms/2);
-      digitalWrite(mtr_in1, LOW);
-      prevTime = millis();
-    } else {
-      tone(mtr_in1, toneFreq);
-    }
-  }
-  if (state && toneFreq < 31) {
-    if (millis() - prevTime >= period_in_ms/2) {
-      digitalWrite(mtr_in1, HIGH);
-      delay(period_in_ms/2);
-      digitalWrite(mtr_in1, LOW);
-      prevTime = millis();
-    }
+    tone1.play(toneFreq);
+//    if (toneFreq < 31) {              // basic tone function does not go below 31Hz
+//      // set digital on off?
+//      digitalWrite(mtr_in1, HIGH);
+//      delay(period_in_ms/2);
+//      digitalWrite(mtr_in1, LOW);
+//      prevTime = millis();
+//    } else {
+//      tone(mtr_in1, toneFreq);
+//    }
+//  }
+//  if (state && toneFreq < 31) {
+//    if (millis() - prevTime >= period_in_ms/2) {
+//      digitalWrite(mtr_in1, HIGH);
+//      delay(period_in_ms/2);
+//      digitalWrite(mtr_in1, LOW);
+//      prevTime = millis();
+//    }
   }
   if (!state) {
-    noTone(mtr_in1);
+    tone1.stop();
     toneFreq = 0;
   }
 }
