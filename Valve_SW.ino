@@ -11,12 +11,11 @@
 #define encoder0PinA 3
 #define encoder0PinB 4
 #define encoder0Btn 5
-#define startBtn 6
-#define stopBtn 7
 #define mtr_in1 11
 #define mtr_in2 10
 
-#define BTN_DEBOUNCE_VAL 10
+#define SW_DEBOUNCE_VAL 10
+#define BTN_DEBOUNCE_VAL 100
 #define ENC_DEBOUNCE_VAL 7
 #define ENC_DELTA_VAL 1
 
@@ -40,13 +39,14 @@ enum rigState {
   paused,
   active
 };
-volatile static rigState state = paused;
+volatile static bool state = 0;   // 0: off 1: on
 volatile static bool stateChanged = false;
 static int toneFreq = 0;
 static int prevTime = 0;
 static int period_in_ms = 0;
 
-static int btn_debounce = 0;
+volatile static int btn_debounce = 0;
+static int sw_debounce = 0;
 volatile static int encoder_debounce;
 
 void doEncoder()
@@ -67,15 +67,12 @@ void doEncoder()
 }
 
 void doButtons() {
-  if (digitalRead(startBtn)) {
-    // pressed start
-    state = active;
+  // pressed start: toggle
+  if (btn_debounce == 0) {
+    state = !state;
+    stateChanged = true;
+    btn_debounce = BTN_DEBOUNCE_VAL;
   }
-  if (digitalRead(stopBtn)) {
-    // pressed stop 
-    state = paused;
-  }
-  stateChanged = true;
 }
 
 void printLCD() {
@@ -163,11 +160,9 @@ void setup() {
   pinMode(encoder0Btn, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(encoder0PinA), doEncoder, CHANGE);
 
-  // init buttons
+  // init button
   pinMode(btnIntPin, INPUT);
-  pinMode(startBtn, INPUT);
-  pinMode(stopBtn, INPUT);
-  attachInterrupt(digitalPinToInterrupt(btnIntPin), doButtons, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(btnIntPin), doButtons, RISING);
   
   frequency = 300;
   freqDigit = 0;
@@ -177,24 +172,27 @@ void setup() {
 
 // the loop function runs over and over again forever
 void loop() {
-  int btn = digitalRead(encoder0Btn);
-  if (!btn) {
-    if (btn_debounce == 0) {
+  // read rotary encoder switch (TODO: set to interrupt)
+  int sw = digitalRead(encoder0Btn);
+  if (!sw) {
+    if (sw_debounce == 0) {
       // new instance of button press
-      btn_debounce = BTN_DEBOUNCE_VAL;
+      sw_debounce = BTN_DEBOUNCE_VAL;
       freqDigit = (++freqDigit >= 4)? 0 : freqDigit;  // rollover to starting digit
     }
   }
-  if (btn_debounce > 0){
-    Serial.print(btn_debounce);
+  if (btn_debounce > 0) {
     btn_debounce --;
+  }
+  if (sw_debounce > 0){
+    sw_debounce --;
   }
   if (encoder_debounce > 0) {
     encoder_debounce --;
   }
 
   // only print lcd if state or digits or digit select changed
-  if (!btn || digitsChanged || stateChanged) { 
+  if (!sw || digitsChanged || stateChanged) { 
     checkDigits();
     printLCD();
     digitsChanged = false;
