@@ -15,7 +15,7 @@
 #define mtr_in2 10
 
 #define SW_DEBOUNCE_VAL 10
-#define BTN_DEBOUNCE_VAL 100
+#define BTN_DEBOUNCE_VAL 50
 #define ENC_DEBOUNCE_VAL 7
 #define ENC_DELTA_VAL 1
 
@@ -35,10 +35,6 @@ int freqDigit;
 int freqDigits[] = {0,0,0,1};
 volatile static bool digitsChanged = false;
 
-enum rigState {
-  paused,
-  active
-};
 volatile static bool state = 0;   // 0: off 1: on
 volatile static bool stateChanged = false;
 static int toneFreq = 0;
@@ -85,7 +81,7 @@ void printLCD() {
   lcd.setCursor(freqDigit,1);
   lcd.print("^");
   lcd.setCursor(10,1);
-  if (state == active) {
+  if (state) {
     lcd.print("ACTIVE");
   } else {
     lcd.print("PAUSED");
@@ -162,7 +158,7 @@ void setup() {
 
   // init button
   pinMode(btnIntPin, INPUT);
-  attachInterrupt(digitalPinToInterrupt(btnIntPin), doButtons, RISING);
+  attachInterrupt(digitalPinToInterrupt(btnIntPin), doButtons, FALLING);
   
   frequency = 300;
   freqDigit = 0;
@@ -177,7 +173,7 @@ void loop() {
   if (!sw) {
     if (sw_debounce == 0) {
       // new instance of button press
-      sw_debounce = BTN_DEBOUNCE_VAL;
+      sw_debounce = SW_DEBOUNCE_VAL;
       freqDigit = (++freqDigit >= 4)? 0 : freqDigit;  // rollover to starting digit
     }
   }
@@ -198,10 +194,11 @@ void loop() {
     digitsChanged = false;
     stateChanged = false;
   }
+  
+  // only change tone if freq changed from what is currently playing and play state
   if (toneFreq != frequency && state) {
-    // only change tone if freq changed from what is currently playing and play state
     toneFreq = frequency;
-    if (toneFreq < 31) {
+    if (toneFreq < 31) {              // basic tone function does not go below 31Hz
       // set digital on off?
       digitalWrite(mtr_in1, HIGH);
       delay(period_in_ms/2);
