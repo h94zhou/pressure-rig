@@ -16,6 +16,8 @@
 #define mtr_in1 11
 #define mtr_in2 10
 
+#define BTN_DEBOUNCE_VAL 10
+
 //Logic inputs for the DRV8871 unit
 //By default the valve is off when there is no voltage. Keep both pins to 0 (low)
 //To turn on, set in1 to high, in2 to low (current flows OUT1 to OUT2)
@@ -39,6 +41,10 @@ enum rigState {
 static rigState state = paused;
 static bool stateChanged = false;
 static int toneFreq = 0;
+static int prevTime = 0;
+static int period_in_ms = 0;
+
+static int btn_debounce = 0;
 
 void doEncoder()
 {
@@ -89,7 +95,7 @@ bool checkDigits() {
   Serial.print(valRotary);
   Serial.print(" ");
   Serial.println(lastValRotary);
-  if(valRotary - lastValRotary > 1) {
+  if(valRotary - lastValRotary > 0) {
 //    Serial.print("  CCW");      // decrement
 //    if (freqDigit == 0) {
       // only 0-1
@@ -101,7 +107,7 @@ bool checkDigits() {
       freqDigits[freqDigit] = (--freqDigits[freqDigit] < 0)? 9 : freqDigits[freqDigit];
 //    }
   }
-  if(lastValRotary - valRotary > 1) {
+  if(lastValRotary - valRotary > 0) {
 //    Serial.print("  CW");       // increment
 //    if (freqDigit == 0) {
       // only 0-1
@@ -120,6 +126,7 @@ bool checkDigits() {
     freqDigits[2] = 0;
     freqDigits[3] = 0;
   }
+  period_in_ms = 1000/frequency;
   lastValRotary = valRotary;
   return (prevFreq != frequency); // return true if frequency has changed
 }
@@ -166,7 +173,15 @@ void setup() {
 void loop() {
   int btn = digitalRead(encoder0Btn);
   if (!btn) {
-    freqDigit = (++freqDigit >= 4)? 0 : freqDigit;  // rollover to starting digit
+    if (btn_debounce == 0) {
+      // new instance of button press
+      btn_debounce = BTN_DEBOUNCE_VAL;
+      freqDigit = (++freqDigit >= 4)? 0 : freqDigit;  // rollover to starting digit
+    }
+  }
+  if (btn_debounce > 0){
+    Serial.print(btn_debounce);
+    btn_debounce --;
   }
 
   // only print lcd if state or digits or digit select changed
@@ -179,12 +194,26 @@ void loop() {
   if (toneFreq != frequency && state) {
     // only change tone if freq changed from what is currently playing and play state
     toneFreq = frequency;
-    tone(mtr_in1, toneFreq);
+    if (toneFreq < 31) {
+      // set digital on off?
+      digitalWrite(mtr_in1, HIGH);
+      delay(period_in_ms/2);
+      digitalWrite(mtr_in1, LOW);
+      prevTime = millis();
+    } else {
+      tone(mtr_in1, toneFreq);
+    }
+  }
+  if (state && toneFreq < 31) {
+    if (millis() - prevTime >= period_in_ms/2) {
+      digitalWrite(mtr_in1, HIGH);
+      delay(period_in_ms/2);
+      digitalWrite(mtr_in1, LOW);
+      prevTime = millis();
+    }
   }
   if (!state) {
     noTone(mtr_in1);
     toneFreq = 0;
   }
-  
-  delay(500);
 }
