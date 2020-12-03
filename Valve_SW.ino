@@ -17,6 +17,8 @@
 #define mtr_in2 10
 
 #define BTN_DEBOUNCE_VAL 10
+#define ENC_DEBOUNCE_VAL 7
+#define ENC_DELTA_VAL 1
 
 //Logic inputs for the DRV8871 unit
 //By default the valve is off when there is no voltage. Keep both pins to 0 (low)
@@ -32,32 +34,36 @@ volatile int valRotary;
 int lastValRotary;
 int freqDigit;
 int freqDigits[] = {0,0,0,1};
-static bool digitsChanged = false;
+volatile static bool digitsChanged = false;
 
 enum rigState {
   paused,
   active
 };
-static rigState state = paused;
-static bool stateChanged = false;
+volatile static rigState state = paused;
+volatile static bool stateChanged = false;
 static int toneFreq = 0;
 static int prevTime = 0;
 static int period_in_ms = 0;
 
 static int btn_debounce = 0;
+volatile static int encoder_debounce;
 
 void doEncoder()
 {
-  if (digitalRead(encoder0PinA) == digitalRead(encoder0PinB))
-  {
-  encoder0Pos++;
+  if(encoder_debounce == 0) {
+    if (digitalRead(encoder0PinA) == digitalRead(encoder0PinB))
+    {
+    encoder0Pos++;
+    }
+    else
+    {
+    encoder0Pos--;
+    }
+    valRotary = encoder0Pos/2;
+    digitsChanged = true;
+    encoder_debounce = ENC_DEBOUNCE_VAL;
   }
-  else
-  {
-  encoder0Pos--;
-  }
-  valRotary = encoder0Pos/2.5;
-  digitsChanged = true;
 }
 
 void doButtons() {
@@ -95,7 +101,7 @@ bool checkDigits() {
   Serial.print(valRotary);
   Serial.print(" ");
   Serial.println(lastValRotary);
-  if(valRotary - lastValRotary > 0) {
+  if(valRotary - lastValRotary >= ENC_DELTA_VAL) {
 //    Serial.print("  CCW");      // decrement
 //    if (freqDigit == 0) {
       // only 0-1
@@ -107,7 +113,7 @@ bool checkDigits() {
       freqDigits[freqDigit] = (--freqDigits[freqDigit] < 0)? 9 : freqDigits[freqDigit];
 //    }
   }
-  if(lastValRotary - valRotary > 0) {
+  if(lastValRotary - valRotary >= ENC_DELTA_VAL) {
 //    Serial.print("  CW");       // increment
 //    if (freqDigit == 0) {
       // only 0-1
@@ -182,6 +188,9 @@ void loop() {
   if (btn_debounce > 0){
     Serial.print(btn_debounce);
     btn_debounce --;
+  }
+  if (encoder_debounce > 0) {
+    encoder_debounce --;
   }
 
   // only print lcd if state or digits or digit select changed
