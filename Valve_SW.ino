@@ -1,11 +1,11 @@
- #include <LiquidCrystal_I2C.h>
+#include <toneAC.h>
+#include <LiquidCrystal_I2C.h>
 #include <Wire.h>
 
 /*
- * Challenges:
- * Probably only want start and stop buttons to be interrupts (not sure if rotary encoder supports)
- * For lower frequencies need a way to poll without busy waiting 
- * First lets try a non-interrupting loop
+ * For this iteration the focus is building upon the existing async-loop code except use a library toneAC, 
+ * which utilizes two pins to generate tones from 1Hz onwards.
+ * ToneAC requires connecting both the pin and ground to the digital pins; this may not be compatible with the motor?
  */
 #define btnIntPin 2
 #define encoder0PinA 3
@@ -13,8 +13,8 @@
 #define encoder0Btn 5
 #define startBtn 6
 #define stopBtn 7
-#define mtr_in1 11
-#define mtr_in2 10
+//#define mtr_in1 9
+//#define mtr_in2 10
 
 #define BTN_DEBOUNCE_VAL 10
 #define ENC_DEBOUNCE_VAL 7
@@ -23,6 +23,7 @@
 //Logic inputs for the DRV8871 unit
 //By default the valve is off when there is no voltage. Keep both pins to 0 (low)
 //To turn on, set in1 to high, in2 to low (current flows OUT1 to OUT2)
+// toneAC() uses pins 9 and 10 on Arduino UNO
 
 LiquidCrystal_I2C lcd(0x27,20,4);
 
@@ -132,6 +133,13 @@ bool checkDigits() {
     freqDigits[2] = 0;
     freqDigits[3] = 0;
   }
+  if (frequency < 1) {         // trim frequency
+  frequency = 1;
+  freqDigits[0] = 0;
+  freqDigits[1] = 0;
+  freqDigits[2] = 0;
+  freqDigits[3] = 1;
+}
   period_in_ms = 1000/frequency;
   lastValRotary = valRotary;
   return (prevFreq != frequency); // return true if frequency has changed
@@ -141,8 +149,8 @@ bool checkDigits() {
 void setup() {
   // initialize digital pin LED_BUILTIN as an output.
   pinMode(LED_BUILTIN, OUTPUT);
-  pinMode(mtr_in1, OUTPUT);
-  pinMode(mtr_in2, OUTPUT);
+//  pinMode(mtr_in1, OUTPUT);
+//  pinMode(mtr_in2, OUTPUT);
 
   // init serial output
   Serial.begin(9600);
@@ -152,10 +160,6 @@ void setup() {
   lcd.backlight();
   lcd.setCursor(1,0);
   lcd.print("Fibos");
-
-  //set the initial valve start
-  digitalWrite(mtr_in1, LOW);
-  digitalWrite(mtr_in2, LOW);
 
   // init rotary encoder
   pinMode(encoder0PinA, INPUT_PULLUP);
@@ -203,26 +207,11 @@ void loop() {
   if (toneFreq != frequency && state) {
     // only change tone if freq changed from what is currently playing and play state
     toneFreq = frequency;
-    if (toneFreq < 31) {
-      // set digital on off?
-      digitalWrite(mtr_in1, HIGH);
-      delay(period_in_ms/2);
-      digitalWrite(mtr_in1, LOW);
-      prevTime = millis();
-    } else {
-      tone(mtr_in1, toneFreq);
-    }
+    toneAC(toneFreq, true);
   }
-  if (state && toneFreq < 31) {
-    if (millis() - prevTime >= period_in_ms/2) {
-      digitalWrite(mtr_in1, HIGH);
-      delay(period_in_ms/2);
-      digitalWrite(mtr_in1, LOW);
-      prevTime = millis();
-    }
-  }
+  
   if (!state) {
-    noTone(mtr_in1);
+    toneAC();
     toneFreq = 0;
   }
 }
