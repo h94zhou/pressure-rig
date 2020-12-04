@@ -14,12 +14,12 @@
 #define encoder0Btn 5
 #define mtr_in1 11
 #define mtr_in2 10
+#define PIN_UNUSED 13
 
 #define SW_DEBOUNCE_VAL 10
 #define BTN_DEBOUNCE_VAL 50
-#define ENC_DEBOUNCE_VAL 7
+#define ENC_DEBOUNCE_VAL 50
 #define ENC_DELTA_VAL 1
-#define PIN_UNUSED 13
 
 //Logic inputs for the DRV8871 unit
 //By default the valve is off when there is no voltage. Keep both pins to 0 (low)
@@ -27,30 +27,33 @@
 
 LiquidCrystal_I2C lcd(0x27,20,4);
 
-uint32_t prev_micros;
-int frequency = 1;             // in Hz
-int freqDelta = 50;        // in Hz
-volatile int encoder0Pos = 0;
-volatile int valRotary;
-int lastValRotary;
+int frequency = 1;              // in Hz
+int freqDelta = 0;              // in Hz- manual frequency offset
 int freqDigit;
 int freqDigits[] = {0,0,0,1};
 volatile static bool digitsChanged = false;
 
 volatile static bool state = 0;   // 0: off 1: on
 volatile static bool stateChanged = false;
+
 static int toneFreq = 0;
-static int prevTime = 0;
-static int period_in_ms = 0;
 Tone tone2;
 Tone tone1;
 
+volatile int encoder0Pos = 0;
+volatile int valRotary;
+int lastValRotary;
+
 volatile static int btn_debounce = 0;
 static int sw_debounce = 0;
-volatile static int encoder_debounce;
+volatile static int encoder_debounce = 0;
 
+/*
+ * ISR (Interrupt Service Routine) triggered by encoder pin encoderPinA 
+ */
 void doEncoder()
 {
+  // only trigger if finished debouncing
   if(encoder_debounce == 0) {
     if (digitalRead(encoder0PinA) == digitalRead(encoder0PinB))
     {
@@ -60,12 +63,15 @@ void doEncoder()
     {
     encoder0Pos--;
     }
-    valRotary = encoder0Pos/2;
+    valRotary = encoder0Pos/2.5;
     digitsChanged = true;
     encoder_debounce = ENC_DEBOUNCE_VAL;
   }
 }
 
+/*
+ * ISR (Interrupt Service Routine) triggered by start/stop button
+ */
 void doButtons() {
   // pressed start: toggle
   if (btn_debounce == 0) {
@@ -75,6 +81,9 @@ void doButtons() {
   }
 }
 
+/*
+ * Update lcd screen based on global variables
+ */
 void printLCD() {
   lcd.clear();
   lcd.setCursor(0,0);
@@ -92,36 +101,29 @@ void printLCD() {
   }
 }
 
+/*
+ * Change frequency based on rotary encoder inputs
+ * returns if frequency has changed
+ */
 bool checkDigits() {
   int prevFreq = frequency;
+  // print out rotary values
   Serial.print("val, last: ");
   Serial.print(valRotary);
   Serial.print(" ");
   Serial.println(lastValRotary);
+  
   if(valRotary - lastValRotary >= ENC_DELTA_VAL) {
-//    Serial.print("  CCW");      // decrement
-//    if (freqDigit == 0) {
-      // only 0-1
-//      freqDigits[freqDigit] = (--freqDigits[freqDigit] < 0)? 1 : freqDigits[freqDigit];
-//    } else if (freqDigit == 1) {
-      // 0-2 or 0-9 depending on digit 0
-//      freqDigits[freqDigit] = (--freqDigits[freqDigit] < 0)? 2 : freqDigits[freqDigit];
-//    } else {
-      freqDigits[freqDigit] = (--freqDigits[freqDigit] < 0)? 9 : freqDigits[freqDigit];
-//    }
+    // decrement
+    freqDigits[freqDigit] = (--freqDigits[freqDigit] < 0)? 9 : freqDigits[freqDigit];
   }
   if(lastValRotary - valRotary >= ENC_DELTA_VAL) {
-//    Serial.print("  CW");       // increment
-//    if (freqDigit == 0) {
-      // only 0-1
-//      freqDigits[freqDigit] = (++freqDigits[freqDigit] > 1)? 0 : freqDigits[freqDigit];
-//    } else {
-      freqDigits[freqDigit] = (++freqDigits[freqDigit] > 9)? 0 : freqDigits[freqDigit];
-//    }
+    // incremement
+    freqDigits[freqDigit] = (++freqDigits[freqDigit] > 9)? 0 : freqDigits[freqDigit];
   }
 
   frequency = freqDigits[0]*1000 + freqDigits[1]*100 + freqDigits[2]*10 + freqDigits[3];
-//  Serial.print(frequency);
+
   if (frequency > 1200) {         // trim frequency
     frequency = 1200;
     freqDigits[0] = 1;
@@ -129,7 +131,13 @@ bool checkDigits() {
     freqDigits[2] = 0;
     freqDigits[3] = 0;
   }
-  period_in_ms = 1000/frequency;
+  if (frequency == 0) {         // trim frequency
+    frequency = 1;
+    freqDigits[0] = 0;
+    freqDigits[1] = 0;
+    freqDigits[2] = 0;
+    freqDigits[3] = 1;
+  }
   lastValRotary = valRotary;
   return (prevFreq != frequency); // return true if frequency has changed
 }
@@ -161,10 +169,12 @@ void setup() {
   pinMode(btnIntPin, INPUT);
   attachInterrupt(digitalPinToInterrupt(btnIntPin), doButtons, FALLING);
 
-  // init tones
+  // init tones. tone2 needs to be init although unused because the library
+  // does not allow for selection of timer, and assigns them in order (timer2, timer1, timer0)
+  // on UNO timer1 is 16 bit which allows for 1Hz output waves unlike the other 8 bit timers
   tone2.begin(PIN_UNUSED);
   tone1.begin(mtr_in1);
-  
+
   freqDigit = 0;
   delay(1000);
   printLCD();
@@ -172,7 +182,7 @@ void setup() {
 
 // the loop function runs over and over again forever
 void loop() {
-  // read rotary encoder switch (TODO: set to interrupt)
+  // read rotary encoder switch
   int sw = digitalRead(encoder0Btn);
   if (!sw) {
     if (sw_debounce == 0) {
@@ -203,23 +213,6 @@ void loop() {
   if (toneFreq != frequency && state) {
     toneFreq = frequency;
     tone1.play(toneFreq);
-//    if (toneFreq < 31) {              // basic tone function does not go below 31Hz
-//      // set digital on off?
-//      digitalWrite(mtr_in1, HIGH);
-//      delay(period_in_ms/2);
-//      digitalWrite(mtr_in1, LOW);
-//      prevTime = millis();
-//    } else {
-//      tone(mtr_in1, toneFreq);
-//    }
-//  }
-//  if (state && toneFreq < 31) {
-//    if (millis() - prevTime >= period_in_ms/2) {
-//      digitalWrite(mtr_in1, HIGH);
-//      delay(period_in_ms/2);
-//      digitalWrite(mtr_in1, LOW);
-//      prevTime = millis();
-//    }
   }
   if (!state) {
     tone1.stop();
