@@ -1,13 +1,7 @@
 #include <Tone.h>
 #include <LiquidCrystal_I2C.h>
-//#include <Wire.h>
+#include <Wire.h>
 
-/*
- * Challenges:
- * Probably only want start and stop buttons to be interrupts (not sure if rotary encoder supports)
- * For lower frequencies need a way to poll without busy waiting 
- * First lets try a non-interrupting loop
- */
 #define btnIntPin 2
 #define encoder0PinA 3
 #define encoder0PinB 4
@@ -112,32 +106,26 @@ bool checkDigits() {
   Serial.print(valRotary);
   Serial.print(" ");
   Serial.println(lastValRotary);
+
+  int pow10[] = { 1000, 100, 10, 1 };
   
   if(valRotary - lastValRotary >= ENC_DELTA_VAL) {
-    // decrement
-    freqDigits[freqDigit] = (--freqDigits[freqDigit] < 0)? 9 : freqDigits[freqDigit];
+    // decrement with rollover
+    frequency = frequency - pow10[freqDigit];
+    if ( frequency <= 0 ) frequency = 1;
   }
   if(lastValRotary - valRotary >= ENC_DELTA_VAL) {
     // incremement
-    freqDigits[freqDigit] = (++freqDigits[freqDigit] > 9)? 0 : freqDigits[freqDigit];
+    frequency = frequency + pow10[freqDigit];
+    if ( frequency > 1200 ) frequency = 1200;
+  }
+  
+  int freqToArray = frequency;
+  for (int i = 3; i >= 0; --i) {
+    freqDigits[i] = freqToArray % 10;
+    freqToArray /= 10;
   }
 
-  frequency = freqDigits[0]*1000 + freqDigits[1]*100 + freqDigits[2]*10 + freqDigits[3];
-
-  if (frequency > 1200) {         // trim frequency
-    frequency = 1200;
-    freqDigits[0] = 1;
-    freqDigits[1] = 2;
-    freqDigits[2] = 0;
-    freqDigits[3] = 0;
-  }
-  if (frequency == 0) {         // trim frequency
-    frequency = 1;
-    freqDigits[0] = 0;
-    freqDigits[1] = 0;
-    freqDigits[2] = 0;
-    freqDigits[3] = 1;
-  }
   lastValRotary = valRotary;
   return (prevFreq != frequency); // return true if frequency has changed
 }
