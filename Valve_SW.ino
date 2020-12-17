@@ -10,9 +10,9 @@
 #define mtr_in2 10
 #define PIN_UNUSED 13
 
-#define SW_DEBOUNCE_VAL 10
-#define BTN_DEBOUNCE_VAL 50
-#define ENC_DEBOUNCE_VAL 50
+#define SW_DEBOUNCE_VAL 100
+#define BTN_DEBOUNCE_VAL 1000
+#define ENC_DEBOUNCE_VAL 1000
 #define ENC_DELTA_VAL 1
 
 //Logic inputs for the DRV8871 unit
@@ -21,10 +21,10 @@
 
 LiquidCrystal_I2C lcd(0x27,20,4);
 
-int frequency = 1;              // in Hz
+int frequency = 200;              // in Hz
+int freqDigits[] = {0,2,0,0};
 int freqDelta = 0;              // in Hz- manual frequency offset
 int freqDigit;
-int freqDigits[] = {0,0,0,1};
 volatile static bool digitsChanged = false;
 
 volatile static bool state = 0;   // 0: off 1: on
@@ -57,7 +57,7 @@ void doEncoder()
     {
     encoder0Pos--;
     }
-    valRotary = encoder0Pos/2.5;
+    valRotary = encoder0Pos;            // use 1:1 rotation to unit increase (1 turn is 1 digit change)
     digitsChanged = true;
     encoder_debounce = ENC_DEBOUNCE_VAL;
   }
@@ -141,8 +141,8 @@ void setup() {
   // init lcd screen
   lcd.init();
   lcd.backlight();
-  lcd.setCursor(1,0);
-  lcd.print("Fibos");
+  lcd.setCursor(5,0);
+  lcd.print("FIBOS");
 
   //set the initial valve start
   digitalWrite(mtr_in2, LOW);
